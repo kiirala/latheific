@@ -9,6 +9,7 @@ latheific: $(OBJECTS)
 
 latheific-strip: latheific
 	strip $< -R .comment -R .gnu.version -R .eh_frame -o $@
+	sstrip $@
 
 latheific-pack: latheific-strip
 	cp $< $<-copy

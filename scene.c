@@ -37,8 +37,8 @@ void render(int time) {
 
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  glRotatef (time / 1000.0f * 3.14f, 1, 0, 1);
-  glTranslatef(0, 0, -5);
+  glTranslatef(0, 0, -2);
+  glRotatef (time / 1000.0f * 360.0f, 1, 0, 1);
   //glScalef(0.3, 0.3, 0.3);
   // glRotatef (ang, 0, 1, 0);
   // glRotatef (ang, 0, 0, 1);
