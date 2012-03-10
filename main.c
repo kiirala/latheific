@@ -1,10 +1,13 @@
 #include <stdlib.h>
-#include <stdio.h>
 #include <stdint.h>
 #include <SDL.h>
 #include <SDL_sound.h>
 #include <time.h>
 #include <unistd.h>
+
+#ifndef NDEBUG
+#include <stdio.h>
+#endif
 
 #include <GL/gl.h>
 
@@ -16,6 +19,8 @@ extern void load();
 extern void unload();
 extern void render(int time);
 extern void resize(int width, int height);
+extern void audio_callback(void *userdata, uint8_t *stream, int len);
+extern void blinkenlichts();
 
 bool fullscreen = false;
 int scrWidth = 800;
@@ -49,11 +54,11 @@ static void init_sdl() {
   }
 
   SDL_WM_SetCaption("Latheific!", "Latheific!");
-  /*
+
   SDL_AudioSpec aspec;
   aspec.freq = 44100;
   aspec.format = AUDIO_S16;
-  aspec.channels = 2;
+  aspec.channels = 1;
   aspec.samples = 2048;
   aspec.callback = audio_callback;
   aspec.userdata = 0;
@@ -62,7 +67,6 @@ static void init_sdl() {
     SDL_Quit();
     exit(1);
   }
-  */
 }
 
 void cleanup(int state, void *foo) {
@@ -73,13 +77,16 @@ void cleanup(int state, void *foo) {
 
 int main(int argc, char **argv) {
   int opt;
-  while ((opt = getopt(argc, argv, "fws:")) != -1) {
+  while ((opt = getopt(argc, argv, "fwsl:")) != -1) {
     switch (opt) {
     case 'f':
       fullscreen = true;
       break;
     case 'w':
       fullscreen = false;
+      break;
+    case 'l':
+      blinkenlichts();
       break;
     case 's': {
       int r = sscanf(optarg, "%dx%d", &scrWidth, &scrHeight);
@@ -111,6 +118,7 @@ int main(int argc, char **argv) {
   uint32_t drawn = 0;
   uint32_t start = SDL_GetTicks();
   bool running = true;
+  SDL_PauseAudio(0);
 
   while (running && !global_done_flag) {
     while (SDL_PollEvent(&event)) {
@@ -133,14 +141,16 @@ int main(int argc, char **argv) {
     SDL_GL_SwapBuffers();
     last_draw = time;
     drawn++;
-    if (time > 80 * 1000) running = false;
+    if (time > 32 * 1000) running = false;
   }
 
+#ifndef NDEBUG
   uint32_t end = SDL_GetTicks();
   double runtime = (end - start) / 1000.0;
   fprintf(stderr, "Drawn %u frames\n", drawn);
   fprintf(stderr, "Runtime %.2f s, %.2f fps drawn\n",
 	  runtime, drawn / runtime);
+#endif
 
   return 0;
 }

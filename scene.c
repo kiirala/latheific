@@ -1,10 +1,91 @@
 #include <stdlib.h>
 #include <math.h>
+
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #include <stdio.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <string.h>
+
+#ifndef NDEBUG
+#include <stdio.h>
+#endif
 
 #define GL_GLEXT_PROTOTYPES
 #include <GL/gl.h>
 #include <GL/glext.h>
+
+int audio_pos = 0;
+int16_t noise_sample[1024];
+int noise_pos = 0;
+int noise_step = 0;
+int noise_counter = 0;
+int noises[] = {10, 14, 10, 20, 14, 10, 20, 10};
+void audio_callback(void *userdata, uint8_t *stream, int len) {
+  int16_t *out = (int16_t*)stream;
+
+  for (int i = 0 ; i < len / 2 ; ++i) {
+    noise_step = noises[(int)floor(audio_pos / 44100.0f / 4.0f)];
+    noise_counter += noise_step;
+    if (noise_counter > 0x1000) {
+      noise_counter -= 0x1000;
+      noise_pos++;
+    }
+    if (noise_pos >= 1024) {
+      noise_pos = 0;
+    }
+    float volume = sin(audio_pos / 44100.0f * 2 * M_PI + M_PI / 2.0f) + 1.0f / 2.0f;
+    out[i] = noise_sample[noise_pos] * volume;
+    audio_pos++;
+  }
+}
+
+static void colour_hsl(float *colour, const int h, const int s, const int l) {
+  const int q = ((l < 128) ? (l * 256 + l * s) : ((l + s) * 256 - (l * s))) / 256;
+  const int p = 2 * l - q;
+  for (int col_n = 0 ; col_n < 3 ; col_n++) {
+    int tmp_col;
+    int t = h - col_n * 85 + 85;
+    //if (t < 0) t += 256;
+    //if (t >= 256) t -= 256;
+    t &= 255;
+    if (t < 43) {
+      tmp_col = p + ((q - p) * 6 * t) / 256;
+    } else if (t < 128) {
+      tmp_col = q;
+    } else if (t < 171) {
+      tmp_col = p + ((q - p) * (171 - t) * 6) / 256;
+    } else {
+      tmp_col = p;
+    }
+    if (tmp_col > 255) tmp_col = 255;
+    if (tmp_col < 0) tmp_col = 0;
+    colour[col_n] = tmp_col / 255.0f;
+  }
+  colour[3] = 1.0f;
+}
+
+int use_lights = 0;
+int s;
+struct sockaddr_in sockaddr;
+
+static void setLights(int r, int g, int b) {
+  if (use_lights) {
+    const int lightCount = 39;
+    char cmd[10 + 6 * 39] = {1, 0, 'k', 'i', 'i', 'r', 'a', 'l', 'a', 0};
+    for (int i = 0 ; i < lightCount ; ++i) {
+      cmd[i * 6 + 10] = 1;
+      cmd[i * 6 + 1 + 10] = i;
+      cmd[i * 6 + 2 + 10] = 0;
+      cmd[i * 6 + 3 + 10] = r;
+      cmd[i * 6 + 4 + 10] = g;
+      cmd[i * 6 + 5 + 10] = b;
+    }
+    sendto(s, cmd, sizeof(cmd), 0, &sockaddr, sizeof(sockaddr));
+  }
+}
 
 static int const aspectratio_w = 16;
 static int const aspectratio_h = 9;
@@ -22,6 +103,7 @@ typedef struct {
   GLuint vao, *vbo;
 } Object;
 
+#ifndef NDEBUG
 #define logGL() logGL_impl(__FILE__, __LINE__)
 static void logGL_impl(const char *file, int line) {
   GLenum err = glGetError();
@@ -29,6 +111,9 @@ static void logGL_impl(const char *file, int line) {
     printf("GL error %d in %s:%d", err, file, line);
   }
 }
+#else
+#define logGL() { }
+#endif
 
 static void setupProjection() {
   glMatrixMode(GL_PROJECTION);
@@ -42,6 +127,7 @@ static void setupProjection() {
 }
 
 static void drawAxis() {
+  /*
   glShadeModel(GL_FLAT);
   glDisable(GL_DEPTH_TEST);
   glDisable(GL_TEXTURE_2D);
@@ -64,7 +150,7 @@ static void drawAxis() {
   glVertex3f (0., 0., 0.);
   glVertex3f (0., 0., 1.);
   glEnd ();
-
+  */
 }
 
 static Mesh* lathe(float *points, int pointCount, int steps) {
@@ -122,6 +208,15 @@ static void ballVertexMap(Mesh *mesh) {
 Mesh* someMesh;
 Object* someObject;
 
+void blinkenlichts() {
+  use_lights = 1;
+  s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  memset(&sockaddr, 0, sizeof(sockaddr));
+  sockaddr.sin_family = AF_INET;
+  sockaddr.sin_port = htons(9909);
+  inet_aton("192.168.10.1", &sockaddr.sin_addr);
+}
+
 void load() {
   float points[] = {0, -1, 1, -.2, .8, .2, 0, 1};
   someMesh = lathe(points, 4, 20);
@@ -147,11 +242,16 @@ void load() {
   glBindBuffer(GL_ARRAY_BUFFER, 0);
   glBindVertexArray(0);
   logGL();
+
+  for (int i = 0 ; i < 1024 ; ++i) {
+    noise_sample[i] = (int16_t)(rand() / (RAND_MAX / 65536));
+  }
 }
 
 void unload() {
 }
 
+int last_lights = 0;
 void render(int time) {
   setupProjection();
 
@@ -167,11 +267,28 @@ void render(int time) {
   for (int x = 0 ; x < xcount ; ++x) {
     for (int y = 0 ; y < ycount ; ++y) {
       glLoadIdentity();
-      glRotatef(sin(time / 1000.0f), 0, 0, 1);
+      glRotatef(sin(time / 1000.0f) * 360.0, 0, 0, 1);
       glTranslatef((x - xcount / 2 + sin(time / 1000.0f * 39.0f)) * 3.5,
 		   (y - ycount / 2 + sin(time / 1000.0f * 239.0f)) * 3.5,
 		   -2);
       glRotatef ((time / 1000.0f + (x ^ y) / 16.0f) * 360.0f, 1, 0, 1);
+
+      float colour[4];
+      const int hues[] = {128, 86, 128, 0, 86, 128, 0, 128};
+      colour_hsl(colour,
+		 (int)(sin(time / 1000.0f) * 20 + hues[time / 1000 / 4] * 15) % 256,
+		 100,
+		 sin(time / 1000.0f * 2 * M_PI) * 128 + 128);
+      float white[4] = {1, 1, 1, 1};
+
+      glLightfv(GL_LIGHT0, GL_DIFFUSE, colour);
+      glLightfv(GL_LIGHT0, GL_SPECULAR, white);
+
+      if (time >= last_lights + 25) {
+	setLights(colour[0] * 255, colour[1] * 255, colour[2] * 255);
+	last_lights = time;
+      }
+
       //glScalef(0.3, 0.3, 0.3);
       // glRotatef (ang, 0, 1, 0);
       // glRotatef (ang, 0, 0, 1);
