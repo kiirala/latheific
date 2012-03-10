@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <math.h>
+#include <stdio.h>
 
 #define GL_GLEXT_PROTOTYPES
 #include <GL/gl.h>
@@ -20,6 +21,14 @@ typedef struct {
   Mesh *mesh;
   GLuint vao, *vbo;
 } Object;
+
+#define logGL() logGL_impl(__FILE__, __LINE__)
+static void logGL_impl(const char *file, int line) {
+  GLenum err = glGetError();
+  if (err != GL_NO_ERROR) {
+    printf("GL error %d in %s:%d", err, file, line);
+  }
+}
 
 static void setupProjection() {
   glMatrixMode(GL_PROJECTION);
@@ -50,8 +59,8 @@ static Mesh* lathe(float *points, int pointCount, int steps) {
 	float x = cos(rot) * distance;
 	float y = sin(rot) * distance;
 	int duplicateCount = 1;
-	if ((step > 0 && point == pointCount - 1) ||
-	    (step < steps - 1 && point == 0)) {
+	if ((step < steps - 1 && point == pointCount - 1 && foo == 1) ||
+	    (step > 0 && point == 0 && foo == 0)) {
 	  duplicateCount = 2;
 	}
 	for (int i = 0 ; i < duplicateCount ; ++i) {
@@ -77,15 +86,22 @@ Object* someObject;
 
 void load() {
   float points[] = {0, -1, 1, -.2, .8, .2, 0, 1};
-  someMesh = lathe(points, 4, 6);
-  Object* someObject = malloc(sizeof(Object));
+  someMesh = lathe(points, 4, 20);
+  someObject = malloc(sizeof(Object));
+  someObject->mesh = someMesh;
   glGenVertexArrays(1, &someObject->vao);
   glBindVertexArray(someObject->vao);
-  someObject->vbo = malloc(sizeof(GLuint) * 1);
-  glGenBuffers(1, someObject->vbo);
+  someObject->vbo = malloc(sizeof(GLuint) * 2);
+  glGenBuffers(2, someObject->vbo);
   glBindBuffer(GL_ARRAY_BUFFER, someObject->vbo[0]);
   glBufferData(GL_ARRAY_BUFFER, someMesh->count * 3 * sizeof(GLfloat),
 	       someMesh->loc, GL_STATIC_DRAW);
+  glBindBuffer(GL_ARRAY_BUFFER, someObject->vbo[1]);
+  glBufferData(GL_ARRAY_BUFFER, someMesh->count * 3 * sizeof(GLfloat),
+	       someMesh->colour, GL_STATIC_DRAW);
+  glBindBuffer(GL_ARRAY_BUFFER, 0);
+  glBindVertexArray(0);
+  logGL();
 }
 
 void unload() {
@@ -125,8 +141,19 @@ void render(int time) {
   glVertex3f (0., 0., 1.);
   glEnd ();
 
-  glBindVertexArray(someObject->vao);
+  glScalef(2, 2, 2);
+  //glBindVertexArray(someObject->vao);
+  logGL();
+  glBindVertexArray(0);
+  glEnableClientState(GL_VERTEX_ARRAY);
+  glBindBuffer(GL_ARRAY_BUFFER, someObject->vbo[0]);
+  glVertexPointer(3, GL_FLOAT, 0, 0);
+  glBindBuffer(GL_ARRAY_BUFFER, someObject->vbo[1]);
+  glColorPointer(3, GL_FLOAT, 0, 0);
+  logGL();
   glDrawArrays(GL_TRIANGLE_STRIP, 0, someObject->mesh->count);
+  glDisableClientState(GL_VERTEX_ARRAY);
+  logGL();
 }
 
 void resize(int width, int height) {

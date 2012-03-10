@@ -5,7 +5,7 @@ OBJECTS=main.o scene.o
 all: latheific latheific-strip latheific-pack
 
 latheific: $(OBJECTS)
-	$(CC) $(LDFLAGS) $^ -o $@
+	$(CC) $^ $(LDFLAGS) -o $@
 
 latheific-strip: latheific
 	strip $< -R .comment -R .gnu.version -R .eh_frame -o $@
