@@ -1,0 +1,21 @@
+Latheific!
+==========
+
+Latheific is a demo project by Niko Kiirala. Original plan was to make a 4k
+intro for Instanssi 2012.
+
+This project includes small lathe code (it creates circular objects from an
+outline. Something like a wine glass, a bowl or a soda bottle). The
+initialization code is, at the moment, much too large to be used in any
+serious 4k intro, but it's good for developing and should be quite easy to
+swap for a more serious one.
+
+Building:
+It should be sufficient to just run
+$ make
+You may get error about missing executable 'sstrip'. If that happens, you need
+the 'ELF kickers' package. Alternatively you may run
+$ make latheific
+to build just the unpacked version.
+
+SDL and OpenGL libraries are required.
